@@ -1,3 +1,10 @@
+//
+//  ChromePaths.swift
+//  Ariadne
+//
+//  Created by Астемир Бозиев on 04.03.2025.
+//
+
 import Foundation
 
 public enum ChromePaths {

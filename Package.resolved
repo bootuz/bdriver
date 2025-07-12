@@ -1,0 +1,15 @@
+{
+  "originHash" : "2e364112096cdad4ee91fd1a9ca1ea2686a9706e49f5ae74b23700cf462fec99",
+  "pins" : [
+    {
+      "identity" : "swift-webdriver",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/thebrowsercompany/swift-webdriver",
+      "state" : {
+        "branch" : "main",
+        "revision" : "eb79abde86888ef086ca56c0c7ccd09a03757c2d"
+      }
+    }
+  ],
+  "version" : 3
+}

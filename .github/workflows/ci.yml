@@ -1,0 +1,202 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run nightly tests at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  SWIFT_VERSION: '5.9'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            CHROME_BIN: google-chrome-stable
+          - os: macos-latest
+            CHROME_BIN: /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: ${{ env.SWIFT_VERSION }}
+        
+    - name: Install Chrome (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Install ChromeDriver (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)
+        wget -N http://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+        unzip chromedriver_linux64.zip
+        sudo mv chromedriver /usr/local/bin/chromedriver
+        sudo chmod +x /usr/local/bin/chromedriver
+        
+    - name: Install ChromeDriver (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install chromedriver
+        
+    - name: Verify ChromeDriver installation
+      run: |
+        chromedriver --version
+        
+    - name: Cache Swift packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          .build
+          ~/.cache/org.swift.swiftpm
+        key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift', 'Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-swift-
+          
+    - name: Build
+      run: swift build -v
+      
+    - name: Run unit tests
+      run: swift test --filter "CoreWebDriverTests"
+      env:
+        CHROME_BIN: ${{ matrix.CHROME_BIN }}
+        
+    - name: Run integration tests
+      run: swift test --filter "Phase3IntegrationTests"
+      env:
+        CHROME_BIN: ${{ matrix.CHROME_BIN }}
+        
+    - name: Run performance tests
+      if: github.event_name == 'schedule'
+      run: swift test --filter "PerformanceTests"
+      env:
+        CHROME_BIN: ${{ matrix.CHROME_BIN }}
+        
+    - name: Generate test coverage
+      if: matrix.os == 'macos-latest'
+      run: |
+        swift test --enable-code-coverage
+        xcrun llvm-cov export -format="lcov" .build/debug/AriadnePackageTests.xctest/Contents/MacOS/AriadnePackageTests -instr-profile .build/debug/codecov/default.profdata > coverage.lcov
+        
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'macos-latest'
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage.lcov
+        flags: unittests
+        name: codecov-umbrella
+        
+  build-release:
+    name: Build Release
+    runs-on: macos-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: ${{ env.SWIFT_VERSION }}
+        
+    - name: Build release
+      run: swift build -c release
+      
+    - name: Archive build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-build
+        path: .build/release/
+        retention-days: 7
+        
+  lint:
+    name: Lint
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: ${{ env.SWIFT_VERSION }}
+        
+    - name: Install SwiftLint
+      run: brew install swiftlint
+      
+    - name: Run SwiftLint
+      run: swiftlint lint --reporter github-actions-logging
+      
+    - name: Check formatting
+      run: |
+        if command -v swift-format >/dev/null 2>&1; then
+          swift-format lint --recursive Sources/ Tests/
+        else
+          echo "swift-format not available, skipping format check"
+        fi
+        
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run security scan
+      uses: securecodewarrior/github-action-add-sarif@v1
+      with:
+        sarif-file: 'security-scan.sarif'
+        
+  documentation:
+    name: Documentation
+    runs-on: macos-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: ${{ env.SWIFT_VERSION }}
+        
+    - name: Install SwiftDocC
+      run: |
+        if ! command -v swift-doc >/dev/null 2>&1; then
+          echo "SwiftDocC not available, skipping documentation generation"
+          exit 0
+        fi
+        
+    - name: Generate documentation
+      run: |
+        if command -v swift-doc >/dev/null 2>&1; then
+          swift-doc generate Sources/ --output docs/
+        fi
+        
+    - name: Deploy documentation
+      if: success()
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs

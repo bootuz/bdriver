@@ -8,62 +8,6 @@
 import Foundation
 import WebDriver
 
-/// Protocol defining the core WebDriver functionality
-public protocol WebDriverProtocol {
-    func send<Req: Request>(_ request: Req) throws -> Req.Response
-}
-
-/// Base implementation of WebDriver that handles communication with the WebDriver server
-public class BaseDriver: WebDriverProtocol {
-    private let httpDriver: HTTPWebDriver
-    private let driverService: DriverService
-    
-    public init(service: DriverService, wireProtocol: WireProtocol = .w3c,  start: Bool = true) throws {
-        self.driverService = service
-        self.httpDriver = HTTPWebDriver(endpoint: service.serviceURL, wireProtocol: wireProtocol)
-
-        if start {
-            try startDriver()
-        }
-    }
-    
-    private func startDriver() throws {
-        try driverService.start()
-        
-        // Wait for Driver to be ready
-        try waitForDriverReady(timeout: 5)
-    }
-    
-    public static func start(service: DriverService) throws -> BaseDriver {
-        return try BaseDriver(service: service)
-    }
-    
-    private func waitForDriverReady(timeout: TimeInterval) throws {
-        let startTime = Date()
-        var lastError: Error?
-        
-        while Date().timeIntervalSince(startTime) < timeout {
-            do {
-                _ = try httpDriver.status
-                return
-            } catch {
-                lastError = error
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-        }
-        
-        throw DriverError.driverNotReady(lastError)
-    }
-    
-    public func send<Req>(_ request: Req) throws -> Req.Response where Req : Request {
-        try httpDriver.send(request)
-    }
-    
-    deinit {
-        driverService.stop()
-    }
-}
-
 /// Protocol for driver service management
 public protocol DriverService {
     var serviceURL: URL { get }
@@ -77,17 +21,19 @@ public protocol DriverService {
 public class DefaultDriverService: DriverService {
     private let executablePath: String
     private let port: Int
+    private let ip: String
     private var process: DriverProcessManager?
     private let arguments: [String]
     
-    public init(executablePath: String, port: Int = 9515, arguments: [String] = []) {
+    public init(executablePath: String, ip: String = "127.0.0.1", port: Int = 9515, arguments: [String] = []) {
         self.executablePath = executablePath
+        self.ip = ip
         self.port = port
         self.arguments = arguments
     }
     
     public var serviceURL: URL {
-        return URL(string: "http://localhost:\(port)")!
+        return URL(string: "http://\(ip):\(port)")!
     }
     
     public var isRunning: Bool {
@@ -95,23 +41,39 @@ public class DefaultDriverService: DriverService {
     }
     
     public func start() throws {
-        guard process == nil else { return }
+        print("🚀 [BaseDriver] Starting ChromeDriver service...")
+        print("📂 [BaseDriver] Executable path: \(executablePath)")
+        print("🌐 [BaseDriver] IP: \(ip), Port: \(port)")
+        
+        guard process == nil else { 
+            print("⚠️ [BaseDriver] Process already running, skipping start")
+            return 
+        }
         
         let process = DriverProcessManager()
         process.executableURL = URL(fileURLWithPath: executablePath)
         
-        var allArguments = ["--port=\(port)"]
+        var allArguments = ["--port=\(port)", "--log-level=ALL"]
         allArguments.append(contentsOf: arguments)
         process.arguments = allArguments
+        
+        print("🔧 [BaseDriver] Process arguments: \(allArguments)")
         
         #if os(macOS)
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
         process.standardError = outputPipe
+        print("📝 [BaseDriver] Output pipes configured for macOS")
         #endif
         
-        try process.run()
-        self.process = process
+        do {
+            print("▶️ [BaseDriver] Attempting to run process...")
+            try process.run()
+            self.process = process
+        } catch {
+            print("❌ [BaseDriver] Failed to start process: \(error)")
+            throw error
+        }
     }
     
     public func stop() {

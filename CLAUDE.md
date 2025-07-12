@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Workflow
+
+### General Workflow for Code Changes
+- First think through the problem, read the codebase for relevant files, and write a plan to tasks/todo.md.
+- The plan should have a list of todo items that you can check off as you complete them
+- Before you begin working, check in with me and I will verify the plan.
+- Then, begin working on the todo items, marking them as complete as you go.
+- Give a high level explanation of what changes you made at every step.
+- Make every task and code change as simple as possible. We want to avoid making any massive or complex changes. Every change should impact as little code as possible. Everything is about simplicity.
+- Finally, add a review section to the todo.md file with a summary of the changes you made and any other relevant information.
+
 ## Project Overview
 
 Ariadne is a Swift WebDriver client library that provides a native Swift interface for browser automation. It wraps the swift-webdriver library to provide a more convenient API for Chrome browser automation.

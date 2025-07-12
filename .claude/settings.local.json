@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(swift build)",
+      "Bash(swift test)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(chmod:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(swift test:*)",
+      "Bash(ls:*)",
+      "Bash(/Users/nart/Desktop/chromedriver --version)",
+      "Bash(/Users/nart/Developer/Ariadne/run_chrome_demo.sh:*)"
+    ],
+    "deny": []
+  }
+}

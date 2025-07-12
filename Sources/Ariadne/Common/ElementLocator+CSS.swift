@@ -1,11 +1,9 @@
-
 //
 //  ElementLocator+CSS.swift
 //  Ariadne
 //
 //  Created by Астемир Бозиев on 04.03.2025.
 //
-
 
 import WebDriver
 
